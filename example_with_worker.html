@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/ruby/ruby.min.js"></script>
+    <script src="script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ruby-head-wasm-wasi@0.3.0-2022-09-29-a/dist/browser.umd.js"></script>
+    <title>ruby.wasm 利用サンプル</title>
+    <script>
+      const newWorkerViaBlob = function(relativePath) {
+        const baseURL = window.location.href.replace(/\\/g, "/").replace(/\/[^\/]*$/, "/");
+        const array = ['importScripts("' + baseURL + relativePath + '");'];
+        const blob = new Blob(array, { type: "text/javascript" });
+        const url = window.URL.createObjectURL(blob);
+        return new Worker(url);
+      };
+      let worker = newWorkerViaBlob("worker.js");
+      // https://tshino.hatenablog.com/entry/20180106/1515218776
+
+      worker.addEventListener("message", workerEvent, false);
+
+      function workerEvent(e) {
+        const runButton = document.getElementById("run");
+        if (e.data[0] == "init") {
+          runButton.disabled = false;
+          runButton.innerText = "▶実行";
+          runButton.onclick = run;
+        } else if (e.data[0] == "output") {
+          document.getElementById("output").value += e.data[1];
+        } else if (e.data[0] == "end") {
+          stop(false);
+        }
+      }
+
+      async function run(){
+        const runButton = document.getElementById("run");
+        runButton.innerText = "■停止";
+        runButton.onclick = stop
+        const script = editor.getValue();
+        const input = document.getElementById("input").value;
+        document.getElementById("output").value = "";
+        worker.postMessage(["run", script, input]);
+        const sec = parseInt(document.getElementById("time").value);
+        timer = setTimeout(stop, sec * 1000);
+      }
+
+      function stop(terminate = true) {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        const runButton = document.getElementById("run");
+        if (terminate) {
+          worker.terminate();
+          runButton.disabled = true;
+          runButton.innerText = "準備中";
+          runButton.onclick = run;
+          worker = newWorkerViaBlob("worker.js");
+          worker.addEventListener("message", workerEvent, false);
+        } else {
+          runButton.disabled = false;
+          runButton.innerText = "▶実行";
+          runButton.onclick = run;
+        }
+      }
+    </script>
+  </head>
+
+  <body>
+    <h1>ruby.wasm 利用サンプル (With Web Worker)</h1>
+    <p><a href="https://github.com/ruby/ruby.wasm">ruby.wasm</a> を利用して、任意の Ruby スクリプトをブラウザ上で実行できるようにするサンプルです。</p>
+    <p>
+      <button id="run" disabled>準備中</button>
+      <input type="number" id="time" value="5" />秒後に自動停止
+    </p>
+    <textarea id="txt-editor">
+while line = gets
+  puts line
+end
+
+1.upto(10) do |i|
+  puts i
+  sleep 1
+end</textarea>
+    
+    <textarea id="input" placeholder="入力"></textarea>
+    <textarea id="output" placeholder="出力" readonly></textarea>
+  </body>
+</html>
