@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1, maximum-scale=1" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/ruby/ruby.min.js"></script>
+    <script src="script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ruby-head-wasm-wasi@0.3.0-2022-09-29-a/dist/browser.umd.js"></script>
+    <title>ruby.wasm Example with Web Worker</title>
+    <script>
+      const newWorkerViaBlob = function(relativePath) {
+        const baseURL = window.location.href.replace(/\\/g, "/").replace(/\/[^\/]*$/, "/");
+        const array = ['importScripts("' + baseURL + relativePath + '");'];
+        const blob = new Blob(array, { type: "text/javascript" });
+        const url = window.URL.createObjectURL(blob);
+        return new Worker(url);
+      };
+      let worker = newWorkerViaBlob("worker.js");
+      // https://tshino.hatenablog.com/entry/20180106/1515218776
+
+      worker.addEventListener("message", workerEvent, false);
+
+      function workerEvent(e) {
+        const runButton = document.getElementById("run");
+        if (e.data[0] == "init") {
+          runButton.disabled = false;
+          runButton.innerText = "▶Run";
+          runButton.onclick = run;
+        } else if (e.data[0] == "output") {
+          document.getElementById("output").value += e.data[1];
+        } else if (e.data[0] == "end") {
+          stop(false);
+        }
+      }
+
+      async function run(){
+        const runButton = document.getElementById("run");
+        runButton.innerText = "■Stop";
+        runButton.onclick = stop
+        const script = editor.getValue();
+        const input = document.getElementById("input").value;
+        document.getElementById("output").value = "";
+        worker.postMessage(["run", script, input]);
+        const sec = parseInt(document.getElementById("time").value);
+        timer = setTimeout(stop, sec * 1000);
+      }
+
+      function stop(terminate = true) {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+        const runButton = document.getElementById("run");
+        if (terminate) {
+          worker.terminate();
+          runButton.disabled = true;
+          runButton.innerText = "In preparation";
+          runButton.onclick = run;
+          worker = newWorkerViaBlob("worker.js");
+          worker.addEventListener("message", workerEvent, false);
+        } else {
+          runButton.disabled = false;
+          runButton.innerText = "▶Run";
+          runButton.onclick = run;
+        }
+      }
+    </script>
+  </head>
+
+  <body>
+    <h1>ruby.wasm Example (With Web Worker)</h1>
+    <p>This is a example that allows you to run any Ruby script on your browser using <a href="https://github.com/ruby/ruby.wasm">ruby.wasm</a>.</p>
+    <p>
+      <button id="run" disabled>In preparation</button> 
+      Auto stop after <input type="number" id="time" value="5" /> seconds
+    </p>
+    <textarea id="txt-editor">
+while line = gets
+  puts line
+end
+
+1.upto(10) do |i|
+  puts i
+  sleep 1
+end</textarea>
+    
+    <textarea id="input" placeholder="Input"></textarea>
+    <textarea id="output" placeholder="Output" readonly></textarea>
+  </body>
+</html>
